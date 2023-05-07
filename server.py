@@ -1,4 +1,4 @@
-from flask import Flask, request
+from flask import Flask, request, abort
 import json 
 from config import db
 
@@ -51,4 +51,80 @@ def total_products():
         products += 1
     return json.dumps(products)
 
-app.run(debug=True)
+@app.get("/api/categories")
+def get_categories():
+    products = []
+    cursor = db.products.find({})
+    for prod in cursor:
+        cat =  prod["Category"]
+        if cat not in products:
+            products.append(cat)
+    return json.dumps(products)
+
+@app.get("/api/category/<name>")
+def get_by_category(name):
+    products = []
+    cursor = db.products.find({"Category": name})
+    for prod in cursor:
+        products.append(fix_id(prod))
+    return json.dumps(products)
+
+@app.get("/api/products/search/<text>")
+def get_by_title(text):
+    products = []
+    cursor = db.products.find({"Title": {"$regex": text, "$options": "i"}})
+    for prod in cursor:
+        products.append(fix_id(prod))
+    return json.dumps(products)
+
+@app.get("/api/products/lower/<price>")
+def get_by_lower(price):
+    products = []
+    cursor =db.products.find({"Price": {"$lt": float(price)}})
+    for prod in cursor:
+        products.append(fix_id(prod))
+    return json.dumps(products)
+
+@app.get("/api/products/greater/<price>")
+def get_by_greater(price):
+    products = []
+    cursor =db.products.find({"Price": {"$gte": float(price)}})
+    for prod in cursor:
+        products.append(fix_id(prod))
+    return json.dumps(products)
+
+############### COUPONS ####################
+@app.get("/api/coupons")
+def get_coupons():
+    coupons = []
+    cursor = db.coupons.find({})
+    for coup in cursor:
+        coupons.append(fix_id(coup))
+    return json.dumps(coupons)
+
+@app.post("/api/coupons")
+def save_coupon():
+    data = request.get_json()
+    db.coupons.insert_one(data)
+    print(data)
+    return json.dumps(fix_id(data))
+
+@app.get("/api/coupons/<code>")
+def get_coupon_code(code):
+    coupon = db.coupons.find_one({"coupon_code" : code})
+    if not coupon:
+        return abort(404, "Invalid coupon code")
+    return json.dumps(fix_id(coupon))
+
+
+
+
+
+
+
+
+
+
+
+
+#app.run(debug=True)
