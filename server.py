@@ -2,6 +2,7 @@ from flask import Flask, request, abort
 import json
 from config import db
 from flask_cors import CORS
+from bson import ObjectId
 
 app = Flask(__name__)
 CORS(app)  # disable CORS security rule
@@ -37,8 +38,15 @@ def get_catalog():
 @app.post("/api/catalog")
 def save_product():
     data = request.get_json()
+    if "Title" not in data or len(data["Title"]) < 3:
+        return abort(400, "Title is required and should have at least 3 characters")
+    if not isinstance(data["Price"], (int, float)):
+        return abort(400, "Price must be a number")
+    if data["Price"] <= 0:
+        return abort(400, "Price is required and should be greater than 0")
+    if "Category" not in data:
+        return abort(400, "Category must be selected")
     db.products.insert_one(data)
-    print(data)
     return json.dumps(fix_id(data))
 
 # sum of all price
@@ -110,6 +118,22 @@ def get_by_greater(price):
         products.append(fix_id(prod))
     return json.dumps(products)
 
+
+@app.get("/api/products/byid/<id>")
+def get_by_id(id):
+    db_id = ObjectId(id)
+    product = db.products.find_one({"_id": db_id})
+    if product is None:
+        return abort(404, "Product not found")
+    return json.dumps(fix_id(product))
+
+
+@app.delete("/api/products/<id>")
+def delete_product(id):
+    db_id = ObjectId(id)
+    db.products.delete_one({"_id": db_id})
+    return json.dumps({"status": "OK", "message": "Product successfully deleted"})
+
 ############### COUPONS ####################
 
 
@@ -125,8 +149,16 @@ def get_coupons():
 @app.post("/api/coupons")
 def save_coupon():
     data = request.get_json()
+    existing_coupon = db.coupons.find_one({"coupon_code": data["coupon_code"]})
+    if existing_coupon is not None:
+        return abort(409, "Coupon code already exists")
+    if "coupon_code" not in data or len(data["coupon_code"]) < 4:
+        return abort(400, "Coupon code must exist and be at least 4 characters")
+    if not isinstance(data["coupon_discount"], (int, float)):
+        return abort(400, "Coupon discount must be a number")
+    if not (5 < data["coupon_discount"] < 70):
+        return abort(400, "Coupon discount must be between 5 and 70")
     db.coupons.insert_one(data)
-    print(data)
     return json.dumps(fix_id(data))
 
 
@@ -140,9 +172,8 @@ def get_coupon_code(code):
 
 @app.delete("/api/coupons/<code>")
 def delete_coupon(code):
-    result = db.coupons.delete_one({"coupon_code": code})
-    if result.deleted_count == 0:
-        return abort(404, "Invalid coupon code")
+    db.coupons.delete_one({"coupon_code": code})
     return json.dumps({"status": "OK", "message": "Coupon code successfully deleted"})
+
 
 # app.run(debug=True)
